@@ -24,3 +24,7 @@ Once one player wins by getting to the opposite side sa many times as possible b
 
 1) Download the repository
 2) Run AI-Kido.py
+
+## Background Image Source
+
+The starting map for each game was grabbed from [this site.](https://gameshrimp-art.com/Reign-s-End) All other background images were grabbed from [this Imgur gallery.](https://imgur.com/gallery/GPlx4) All sprites were hand drawn by Garrett Money and Patrick Morgan.
