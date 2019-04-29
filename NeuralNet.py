@@ -1,11 +1,22 @@
 from Node import *
 from Gene import *
 from History import *
-
+import pygame
 import random
 
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+WHITE = (255, 255, 255)
+
+
 class NeuralNet:
-    def __init__(self, inputs, outputs):
+    def __init__(self, inputs, outputs, crossover=False):
+
+        inputTitles = ["x_diff", "y_diff", "vel_diff", "to_goal", "attack","threat"]
+        outputTitles = ["move_right","move_left", "jump", "attack"]
+        self.displayWidth = 400
+
+
         #set input number and output number
         self.inputs = inputs
         self.outputs = outputs
@@ -17,22 +28,26 @@ class NeuralNet:
         self.network = [] #list of the nodes in the order that they need to be considered in the NN
         
         self.nextConnectionNo = 0
+        if crossover == False:
+            #create input nodes
+            for i in range(self.inputs):
+                self.nodes.append(Node(i))
+                self.nextNode += 1
+                self.nodes[i].layer = 0
+                self.nodes[i].title = inputTitles[i]
+            
+            #create output nodes
+            for i in range(self.outputs):
+                self.nodes.append(Node(i + self.inputs))
+                self.nodes[i + self.inputs].layer = 1
+                self.nextNode += 1
+                self.nodes[i + self.inputs].title = outputTitles[i]
+            self.nodes.append(Node(self.nextNode)) #bias node
+            self.biasNode = self.nextNode
+            self.nextNode += 1
+            self.nodes[self.biasNode].layer = 0
 
-        #create input nodes
-        for i in range(self.inputs):
-            self.nodes.append(Node(i))
-            self.nextNode += 1
-            self.nodes[i].layer = 0
-        
-        #create output nodes
-        for i in range(self.outputs):
-            self.nodes.append(Node(i + self.inputs))
-            self.nodes[i + self.inputs].layer = 1
-            self.nextNode += 1
-        self.nodes.append(Node(self.nextNode)) #bias node
-        self.biasNode = self.nextNode
-        self.nextNode += 1
-        self.nodes[self.biasNode].layer = 0
+
 
     #returns the node with a matching number
     #sometimes the nodes will not be in order
@@ -59,7 +74,9 @@ class NeuralNet:
             i.engage()
 
         #the outputs are nodes[inputs] to nodes [inputs+outputs-1]
-        outs = [self.outputs]
+        outs = []
+        for i in range(self.outputs):
+            outs.append(0.0)
         for i in range(self.outputs):
             outs[i] = self.nodes[self.inputs + i].outputValue
         for i in self.nodes: #reset all the nodes for the next feed forward
@@ -85,12 +102,14 @@ class NeuralNet:
         if len(self.genes) == 0:
             self.addConnection(innovationHistory)
             return
-        randomConnection = math.floor(random.randint(1, len(self.genes)))
-        
-        while self.genes[randomConnection].fromNode == self.nodes[self.biasNode] and len(self.genes) !=1 : #dont disconnect bias
-            randomConnection = math.floor(random.randint(1, len(self.genes)))
+        #Bias is node 0, so we don't want to lose it
+        if len(self.genes) > 1:
+            randomConnection = math.floor(random.randint(1, len(self.genes) - 1))
+        else: 
+            randomConnection = 0
 
         self.genes[randomConnection].enabled = False #disable it
+        
         newNodeNo = self.nextNode
         self.nodes.append(Node(newNodeNo))
         self.nextNode += 1
@@ -104,7 +123,7 @@ class NeuralNet:
         self.genes.append(Gene(self.getNode(newNodeNo), self.genes[randomConnection].toNode, self.genes[randomConnection].weight, connectionInnovationNumber))
         self.getNode(newNodeNo).layer = self.genes[randomConnection].fromNode.layer + 1
         
-        connectionInnovationNumber = self.getInnovationNumber(innovationHistory, self.biasNode, self.getNode(newNodeNo))
+        connectionInnovationNumber = self.getInnovationNumber(innovationHistory, self.nodes[self.biasNode], self.getNode(newNodeNo))
         #connect the bias to the new node with a weight of 0 
         self.genes.append(Gene(self.nodes[self.biasNode], self.getNode(newNodeNo), 0, connectionInnovationNumber))
         
@@ -125,12 +144,12 @@ class NeuralNet:
             return
 
         #get random nodes
-        randomNode1 = math.floor(random.randint(1, len(self.nodes))) 
-        randomNode2 = math.floor(random.randint(1, len(self.nodes))) 
+        randomNode1 = math.floor(random.randint(1, len(self.nodes) - 1)) 
+        randomNode2 = math.floor(random.randint(1, len(self.nodes) - 1)) 
         while self.randomConnectionNodesAreBad(randomNode1, randomNode2): 
             #while the random nodes are no good, get new ones
-            randomNode1 = math.floor(random.randint(1, len(self.nodes))) 
-            randomNode2 = math.floor(random.randint(1, len(self.nodes)))
+            randomNode1 = math.floor(random.randint(1, len(self.nodes) - 1)) 
+            randomNode2 = math.floor(random.randint(1, len(self.nodes) - 1))
 
         temp = 0
 
@@ -145,7 +164,7 @@ class NeuralNet:
         connectionInnovationNumber = self.getInnovationNumber(innovationHistory, self.nodes[randomNode1], self.nodes[randomNode2])
         
         #add the connection with a random array
-        self.genes.append(Gene(self.nodes[randomNode1], self.nodes[randomNode2], random.random(-1, 1), connectionInnovationNumber))
+        self.genes.append(Gene(self.nodes[randomNode1], self.nodes[randomNode2], random.uniform(-1, 1), connectionInnovationNumber))
         self.connectNodes()
 
     def randomConnectionNodesAreBad(self, r1, r2):
@@ -165,13 +184,14 @@ class NeuralNet:
             if i.matches(self, fromNode, toNode): #if match found
                 isNew = False #its not a new mutation
                 #set the innovation number as the innovation number of the match
-                connectionInnovationNumber = innovationHistory[i].innovationNumber 
+                connectionInnovationNumber = i.innovationNumber 
                 break
+        innoNumbers = []
         if isNew: #if the mutation is new then create an arrayList of integers representing the current state of the genome
-            innoNumbers = []
             for i in self.genes: #set the innovation numbers
                 innoNumbers.append(i.innovationNo)
         #then add this mutation to the innovationHistory 
+        #print("fromnode: " + str(fromNode) + " tonode: " + str(toNode))
         innovationHistory.append(connectionHistory(fromNode.number, toNode.number, connectionInnovationNumber, innoNumbers))
         self.nextConnectionNo += 1
         return connectionInnovationNumber
@@ -179,11 +199,15 @@ class NeuralNet:
     #returns whether the network is fully connected or not
     def fullyConnected(self):
         maxConnections = 0
-        nodesInLayers = [self.layers] #array which stored the amount of nodes in each layer
+        nodesInLayers = [] #array which stored the amount of nodes in each layer
         
-        #populate array
-        for i in self.nodes:
-            nodesInLayers[i.layer] += 1
+        #loop through layers and add the number of nodes in each layer
+        for l in range(self.layers):
+            i = 0
+            for node in self.nodes:
+                if node.layer == l:
+                    i += 1
+            nodesInLayers.append(i)
 
         #for each layer the maximum amount of connections is the number in this layer * the number of nodes infront of it
         #so lets add the max for each layer together and then we will get the maximum amount of connections in the network
@@ -203,96 +227,77 @@ class NeuralNet:
         if len(self.genes) == 0:
             self.addConnection(innovationHistory)
 
-        rand1 = random.random(1)
+        rand1 = random.uniform(0,1)
         if rand1 < 0.8: # 80% of the time mutate weights
             for i in range(len(self.genes)):
                 self.genes[i].mutateWeight()
 
-        # 8% of the time add a new connection
-        rand2 = random.random(1)
-        if rand2 < 0.08:
+        # 10% of the time add a new connection
+        rand2 = random.uniform(0,1)
+        if rand2 < 0.1:
             self.addConnection(innovationHistory)
             
         # 2% of the time add a node
-        rand3 = random.random(1)
-        if rand3 < 0.02:
-            self.addNode(innovationHistory)
+        # rand3 = random.uniform(0,1)
+        # if rand3 < 0.05:
+        #     self.addNode(innovationHistory)
 
     #called when this Genome is better that the other parent
     def crossover(self, parent2):
-        child = NeuralNet(self.inputs, self.outputs)
+        child = NeuralNet(self.inputs, self.outputs, True)
         child.genes.clear()
         child.nodes.clear()
         child.layers = self.layers
         child.nextNode = self.nextNode
         child.biasNode = self.biasNode
-        childGenes = [] #list of genes to be inherrited form the parents
         isEnabled = [] 
 
         #all inherited genes
-        for i in range(len(self.genes)):
+        for gene in self.genes:
             setEnabled = True #is this node in the chlid going to be enabled
+            parent2gene = self.matchingGene(parent2, gene.innovationNo)
 
-            parent2gene = self.matchingGene(parent2, self.genes[i].innovationNo)
-            if parent2gene != -1: #if the genes match
-                if not self.genes[i].enabled or not parent2.genes[parent2gene].enabled: 
+            if(parent2gene >= len(parent2.genes)):
+                parent2gene = len(parent2.genes) - 1
+            if parent2gene >= 0: #if the genes match
+                # print("parent2gene ", parent2gene, " parent2.genes ", len(parent2.genes))
+                if not gene.enabled or not parent2.genes[parent2gene].enabled: 
                     #if either of the matching genes are disabled
-                    if random.random(1) < 0.75: #75% of the time disabel the childs gene
+                    if random.uniform(0,1) < 0.01: #1% of the time disable the childs gene
                         setEnabled = False
-                rand = random.random(1)
-                if rand<0.5 :
-                    childGenes.append(self.genes[i])
+                rand = random.uniform(0,1)
+                if rand < 0.5 :
+                    child.genes.append(gene.clone(gene.fromNode, gene.toNode))
                     #get gene
                 else:
                     #get gene from parent2
-                    childGenes.append(parent2.genes[parent2gene])
+                    child.genes.append(parent2.genes[parent2gene].clone(parent2.genes[parent2gene].fromNode,parent2.genes[parent2gene].toNode))
             else: #disjoint or excess gene
-                childGenes.append(self.genes[i])
-                setEnabled = self.genes[i].enabled
+                child.genes.append(gene.clone(gene.fromNode, gene.toNode))
+                setEnabled = gene.enabled
             isEnabled.append(setEnabled)
 
         #since all excess and disjoint genes are inherrited from the more fit parent (this Genome) 
         # the childs structure is no different from this parent | with exception of dormant connections 
         # being enabled but this wont effect nodes so all the nodes can be inherrited from this parent
-        for i in range(len(self.nodes)):
-            child.nodes.append(self.nodes[i].clone())
+        for node in self.nodes:
+            child.nodes.append(node.clone())
 
-        #clone all the connections so that they connect the childs new nodes
-        for i in range(len(childGenes)):
-            child.genes.append(childGenes[i].clone(child.getNode(childGenes[i].fromNode.number), child.getNode(childGenes[i].toNode.number)))
-            child.genes[i].enabled = isEnabled[i]
+        #Connect the nodes for the child's neural net
         child.connectNodes()
         return child
-    """
-    # create an empty genome
-    def __init__(self,inputs,outputs):
-        #set input number and output number
-        self.inputs = inputs 
-        self.outputs = outputs
-    """
+
     # returns whether or not there is a gene matching the input innovation number  in the input genome
     def matchingGene(self, parent2, innovationNumber):
-        for i in self.genes:
-            if i.innovationNo == innovationNumber:
+        for i in range(len(parent2.genes)):
+            if parent2.genes[i].innovationNo == innovationNumber:
                 return i
         return -1 #no matching gene found
 
-    """
-    #prints out info about the genome to the console 
-    def printGenome(self):
-        print("Print genome  layers:", self.layers, "\n")
-        print ("bias node: ", self.biasNode, "\n")
-        print("nodes\n")
-        for i in range(len(self.nodes)):
-            print(self.nodes[i].number, ",")
-        print("\nGenes\n")
-        for i in range(len(self.genes)): #for each connectionGene 
-            print("gene ", self.genes[i].innovationNo, "From node ", self.genes[i].fromNode.number, "To node ", self.genes[i].toNode.number, "is enabled ", self.genes.[i].enabled, "from layer ", self.genes[i].fromNode.layer, "to layer ", self.genes[i].toNode.layer, "weight: ", self.genes[i].weight, "\n")
-        print("\n")
-    """
     # returns a copy of this genome
     def clone(self):
         clone = NeuralNet(self.inputs, self.outputs)
+        clone.nodes = []
         for i in self.nodes: # copy nodes
             clone.nodes.append(i.clone())
         
@@ -301,9 +306,62 @@ class NeuralNet:
             clone.genes.append(i.clone(clone.getNode(i.fromNode.number), clone.getNode(i.toNode.number)))
 
         clone.layers = self.layers
+        clone.nodes = self.nodes
         clone.nextNode = self.nextNode
         clone.biasNode = self.biasNode
         clone.connectNodes()
         return clone
 
+    #prints out info about the genome to the console 
+    def printGenome(self):
+        print("Print genome     layers =" + str(self.layers) + "\n")
+        print ("bias node: " + str(self.biasNode) + "\n")
+        print("nodes\n")
+        for i in self.nodes:
+            print(str(i.number), end=",")
+        print("\nGenes\n")
+        for i in self.genes: #for each connectionGene 
+            print("Gene Num:" + str(i.innovationNo) + " From node " + str(i.fromNode.number) + " To node " + str(i.toNode.number) +  " is enabled " + str(i.enabled) +  " from layer " + str(i.fromNode.layer) + " to layer " + str(i.toNode.layer) + " weight: " + str(i.weight) + "\n")
+        print("\n")
 
+    def draw(self, screen, gen):
+        startx = 900
+        starty = 100
+        y_padding = 40
+        x_padding = 70
+
+        x_padding = int(self.displayWidth / self.layers)
+
+        self.displayText(screen, "Gen: " +  str(gen), 800,60, 50, 20, WHITE)
+
+        for l in range(self.layers):
+            y_pad = 0
+            for node in self.network:
+                if node.layer == l:
+                    node_x_pos = startx + (l*x_padding)
+                    node_y_pos = starty + y_pad
+                    node.pos = (node_x_pos, node_y_pos)
+                    pygame.draw.circle(screen, WHITE, node.pos, 5)
+                    y_pad += y_padding
+                    if node.layer == 0 and node.title != None:
+                        self.displayText(screen,node.title, node_x_pos - 50, node_y_pos - 10, 50, 20, WHITE)
+                    if node.layer == self.layers - 1 and node.title != None:
+                        self.displayText(screen, node.title, node_x_pos + 30, node_y_pos - 10, 50, 20, WHITE)
+                    if node.number == len(self.network) - 1:
+                        self.displayText(screen, "Bias", node_x_pos - 50, node_y_pos - 10, 50, 20, WHITE)
+
+
+        for gene in self.genes:
+            if gene.weight < 0:
+                color = RED
+            else:
+                color = BLUE
+            if gene.toNode.inputSum > .7:
+                color = WHITE
+            pygame.draw.line(screen, color, gene.fromNode.pos, gene.toNode.pos, int(gene.weight) + 1)
+
+    def displayText(self, screen, msg, x, y, w, h, color):
+        font = pygame.font.SysFont('Georgia', 10, True, False)
+        text = font.render(msg, True, WHITE)
+        pos = [x,y]
+        screen.blit(text, pos)

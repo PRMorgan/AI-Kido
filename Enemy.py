@@ -5,36 +5,15 @@ import time
 import math
 import random
 
-WHITE = (255, 255, 255)
-GREEN = (0, 255, 0)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-DARKSLATEBLUE = (72,61,139)
-DEEPSKYBLUE = (0,191,255)
-PALEGREEN = (152,251,152)
-ROSYBROWN = (188,143,143)
-PALEVIOLET = (219,112,147)
-YELLOW = (255,255,0)
-heart = pygame.image.load('Images/heart.png')
-death = pygame.image.load('Images/skull.png')
-
 #hurtSound = pygame.mixer.Sound("SFX/LinkHurtEnemy.wav")
 #attackSound = pygame.mixer.Sound("SFX/LinkAttackEnemy.wav")
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 
-# *BUG* player doesn't move down when colliding with other players. 
-# This results in top player getting the kill 9 times out of 10.
-
+#The enemy class
 class Enemy(pygame.sprite.Sprite):
-    """ This class represents the bar at the bottom that the player
-        controls. """
- 
-    # -- Methods
-    def __init__(self, playerID, color, screen, startPos, freeze = False):
-        """ Constructor function """
- 
+    def __init__(self, screen, startPos, freeze = False): 
         # Call the parent's constructor
         super().__init__()
  
@@ -52,17 +31,15 @@ class Enemy(pygame.sprite.Sprite):
         self.numHearts = self.maxHearts
         self.numGoals = 0
 
-        self.color = color 
-        self.playerID = playerID
-
         self.sword = None
         self.isAttacking = False
         self.attackDelay = 30 #30 frames between each attack
+        self.respawnDelay = 30 #Don't redraw the enemy upon death for 30 frames
 
         self.direction = "left"
 
-        self.image = pygame.Surface([self.width, self.height])
-        self.image.fill(color)
+        #The enemy starts by looking left
+        self.image = pygame.image.load('Images/enemyleftangry.png')
 
         # So our player can modify the overall screen
         self.screen = screen
@@ -83,30 +60,33 @@ class Enemy(pygame.sprite.Sprite):
         # List of sprites we can bump against
         self.level = None
     
-    
+    #Updates for each frame so the enemy can interact with the environment 
     def update(self):
-        #update neural network
-        mouse_pos = pygame.mouse.get_pos()
+        mouse_pos = pygame.mouse.get_pos() #We can use the mouse to effect the enemy
 
         if self.attackDelay != 0:
             self.attackDelay -= 1
+        if self.attackDelay == 0:
+            self.attack()
 
+        #Figure out where the other player is
         self.enemyPos = (self.enemy.rect.x, self.enemy.rect.y)
+
+        #Pick an action (Not an AI)
         self.think(self.enemyPos, mouse_pos, True, self.freeze)
 
+        #If we died, we need to respawn
         if self.rect.x <= 0:
             self.numGoals += 1
             self.respawn()
             self.enemy.respawn()
 
-        """ Move the player. """
         # Gravity
         self.calc_grav()
         self.rect.x += self.change_x
         self.calc_friction()
 
         # Move left/right
-    
         if self.isAttacking == True:
             if len(self.level.enemy_attack_list) == 0:
                 self.isAttacking = False
@@ -118,6 +98,7 @@ class Enemy(pygame.sprite.Sprite):
             self.change_x += 10
             self.change_y -= 4
             self.numHearts -= 1
+            self.enemy.numHits += 1
 
 
         # ---------------------- INTERACTION WITH PLATFORMS AND SIDE --------------------------
@@ -155,7 +136,8 @@ class Enemy(pygame.sprite.Sprite):
                 # Otherwise if we are moving left, do the opposite.
                 self.rect.left = block.rect.right
 
-
+    #An algorithm that chooses what action to do based on where the enemy is
+    #also allows us to hurt the enemy with a mouse
     def think(self, point, mousePoint = None, mouseFlag = False,  freeze = False,):
         """
         Converts output of neural net into events
@@ -164,15 +146,20 @@ class Enemy(pygame.sprite.Sprite):
         """
         if freeze:
             return
-        # else:
-        #     action = random.randint(0,2)
-        #     self.executeAction(action)
+        #add some random vairation
+        action = random.randint(0,70)
+        if action == 0:
+            self.go_left()
+        if action == 1:
+            self.go_right()
+        if action == 2:
+            self.jump()
+        if action == 3:
+            self.attack()
+
         if mouseFlag == True:
             if (self.rect.x < mousePoint[0] and self.rect.x + self.width > mousePoint[0]) and (self.rect.y < mousePoint[1] and self.rect.y + self.height > mousePoint[1]):
                 self.numHearts -= 1
-
-        if self.distanceToPoint(point, True, RED, "X") < 50:
-            self.attack()
 
         if self.rect.y > point[1]:
             self.jump()
@@ -181,148 +168,88 @@ class Enemy(pygame.sprite.Sprite):
         elif self.rect.x > point[0]:
             self.go_left()
     
+    #Set the enemy
     def setEnemy(self, enemy):
         if enemy == None:
             self.enemy = None
         self.enemy = enemy
 
+    #Update the health of the enemy
     def updateHealth(self):
-        for hearts in range(self.numHearts):
-                self.screen.blit(heart, ((self.startx - 160 + (hearts * 40)), 35))
-        for deaths in range(self.enemy.numKills):
-            self.screen.blit(death,((self.startx - 40 + ((deaths % 6) * -40)), (110 + (int(deaths/6)*40))))
         if self.numHearts <= 0:
-            self.respawn()
-            self.enemy.numKills += 1
-        
-    def distanceToPoint(self, point, drawFlag = False, color = WHITE, axis = "BOTH"):
-        x_goal = point[0]
-        y_goal = point[1]
-
-        player_pos = (self.rect.x + (self.width/2), self.rect.y + (self.height/2))
-        x_player = player_pos[0]
-        y_player = player_pos[1]
-
-        x_distance = abs(x_goal - x_player)
-        y_distance = abs(y_goal - y_player)
-
-        if axis == "BOTH":
-            total_distance = x_distance*x_distance + y_distance*y_distance
-            total_distance = math.sqrt(total_distance)
-            total_distance = int(total_distance)
-        if axis == "X":
-            total_distance = x_distance
-        if axis == "Y":
-            total_distance = y_distance
-
-        if drawFlag == True:
-            font = pygame.font.SysFont('tahoma', 15, False, False)
-            # HIT TEXT
-            distanceText = font.render(str(total_distance), True, WHITE)
-            x_mid = x_player
-            y_mid = y_player
-            if x_player <= x_goal:
-                x_mid += x_distance/2
+            if self.respawnDelay == 0:
+                self.respawn() #Respawn on death
+                self.enemy.numKills += 1
+                self.respawnDelay = 30
             else:
-                x_mid -= x_distance/2
-            if y_player <= y_goal:
-                y_mid += y_distance/2
-            else:
-                y_mid -= y_distance/2
+                self.respawnDelay -= 1
+                self.rect.x = self.startx
+                self.rect.y = -self.height
 
-            if axis =="X":
-                pygame.draw.line(self.screen, color, player_pos, (x_goal, y_player), 1)
-                midPoint = (x_mid, y_player)
-            else:
-                pygame.draw.line(self.screen, self.color, player_pos, point, 1)
-                midPoint = (x_mid, y_mid)
-            self.screen.blit(distanceText, midPoint)
-
-        return total_distance
-
+    #Calculate friction
     def calc_friction(self):
         if self.change_x > 0:
             self.change_x -= .2
         if self.change_x < 0:
             self.change_x += .2
     
+    #Calculate the effect of gravity
     def calc_grav(self):
-        """ Calculate effect of gravity. """
         if self.change_y == 0:
             self.change_y = 1
         else:
             self.change_y += .45
- 
         # See if we are on the ground.
         if self.rect.y >= SCREEN_HEIGHT - self.rect.height and self.change_y >= 0:
             self.change_y = 0
             self.rect.y = SCREEN_HEIGHT - self.rect.height
     
+    #Make a jump
     def jump(self):
-        """ Called when user hits 'jump' button. """
- 
         # move down a bit and see if there is a platform below us.
         # Move down 2 pixels because it doesn't work well if we only move down
         # 1 when working with a platform moving down.
         self.rect.y += 4
         platform_hit_list = pygame.sprite.spritecollide(self, self.level.platform_list, False)
         self.rect.y -= 4
-
- 
         # If it is ok to jump, set our speed upwards
         if len(platform_hit_list) > 0 or self.rect.bottom >= SCREEN_HEIGHT:
                 self.change_y = -10
     
+    #Move to the left
     def go_left(self):
-        """ Called when the user hits the left arrow. """
         self.direction = "left"
-        self.image = pygame.image.load('Images/enemyleftangry.png')
         if self.change_x < -4:
             self.change_x = -4
         else:
             self.change_x -= .5
 
+    #Move to the right
     def go_right(self):
-        """ Called when the user hits the right arrow. """
         self.direction = "right"
-        self.image = pygame.image.load('Images/enemyrightangry.png')
         if self.change_x > 4:
             self.change_x = 4
         else:
             self.change_x += .5
 
+    #Make an attack
     def attack(self):
         if self.isAttacking == True:
             pass
         elif self.attackDelay == 0:
-            # print(self.playerID, " is attacking!")
             if self.direction == "left":
-                self.image = pygame.image.load('Images/enemyleftangry.png')
                 facing = -1
             if self.direction == "right":
-                self.image = pygame.image.load('Images/enemyrightangry.png')
                 facing = 1
             if self.direction == "none":
                 facing = 0
-
-            self.sword = Sword(self.rect.x, self.rect.y, 40, 20, self.color, facing)
-            
+            self.sword = Sword(self.rect.x, self.rect.y, 40, 20, facing)
             self.level.enemy_attack_list.add(self.sword)
             self.isAttacking = True
             self.attackDelay = 30
 
-    def executeAction(self, action):
-        if action == 0:
-            self.go_left()
-        elif action == 1:
-            self.go_right()
-        elif action == 2:
-            self.jump()
-        elif (action == 3 or action == 4):
-            self.attack()
-
-    def respawn(self):
-        # Respawn back to starting point       
+    #Respawn back to the starting point
+    def respawn(self):     
         self.rect.x = self.startx
         self.rect.y = self.starty
         self.numHearts = self.maxHearts
