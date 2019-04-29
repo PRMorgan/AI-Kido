@@ -3,10 +3,10 @@
 AI-Kido is an NPC vs NPC fighter game implemented using the Python programming language and the Pygame library. This program was written for the CS 480 - Artificial Intelligence class at Truman State University.
 
 Contributors:
-* [Gabriel Lewis](https://www.linkedin.com/in/gabriel-lewis/)
-* [Garrett Money](https://www.linkedin.com/in/garrett-money-25276513a/) ([GitHub](https://github.com/LGxMoney))
-* [Patrick Morgan](https://www.linkedin.com/in/patrick-morgan-921b07173/) ([GitHub](https://github.com/stringsattached))
-* [Rebecca Niemeier](https://www.linkedin.com/in/rebecca-niemeier-1765b3119/)
+* Gabriel Lewis ([LinkedIn](https://www.linkedin.com/in/gabriel-lewis/))
+* Garrett Money ([LinkedIn](https://www.linkedin.com/in/garrett-money-25276513a/)) ([GitHub](https://github.com/LGxMoney))
+* Patrick Morgan ([LinkedIn](https://www.linkedin.com/in/patrick-morgan-921b07173/)) ([GitHub](https://github.com/stringsattached))
+* Rebecca Niemeier ([LinkedIn](https://www.linkedin.com/in/rebecca-niemeier-1765b3119/))
 
 ## Basic Explanation
 
